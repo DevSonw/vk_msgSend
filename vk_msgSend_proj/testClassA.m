@@ -9,6 +9,13 @@
 #import "testClassA.h"
 #import <UIKit/UIKit.h>
 
+typedef void(^blockType)(void);
+@interface testClassA ()
+
+@property(nonatomic,copy) blockType block;
+
+@end
+
 @implementation testClassA
 
 +(NSInteger)testfunction:(int)num withB:(float)boolv withH:(NSString*)str{
@@ -40,6 +47,28 @@
     Protocol *pro = (Protocol*)protocol;
     NSLog(@"%@",NSStringFromProtocol(pro));
     return @"hello";
+}
+
+-(NSString *)testFunctionWithSEL:(SEL)selector
+{
+    return NSStringFromSelector(selector);
+}
+
+-(void)testFunctionWithBlock:(blockType)block
+{
+    self.block = block;
+}
+
+-(void)testFunctionCallBlock{
+    if (self.block) {
+        self.block();
+    }
+}
+
+-(void)testFunctionIDStar:(NSError **)error{
+    if (error) {
+        *error = [NSError errorWithDomain:@"xxxx" code:0 userInfo:nil];
+    }
 }
 
 @end
