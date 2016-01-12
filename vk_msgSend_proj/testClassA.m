@@ -65,10 +65,22 @@ typedef void(^blockType)(void);
     }
 }
 
--(void)testFunctionIDStar:(NSError **)error{
+-(void)testFunctionIDStar:(NSMutableArray **)arr{
+    if (arr) {
+        [*arr addObject:@"aa"];
+    }
+}
+
+-(void)testFunctionError:(NSError **)error{
     if (error) {
         *error = [NSError errorWithDomain:@"xxxx" code:0 userInfo:nil];
     }
+}
+
+-(BOOL)testFunctionObject:(id)obj isKindOfClass:(Class)cls
+{
+    BOOL ret = [obj isKindOfClass:cls];
+    return ret;
 }
 
 @end

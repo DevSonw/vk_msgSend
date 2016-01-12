@@ -38,6 +38,7 @@
 static NSLock *_vkMethodSignatureLock;
 static NSMutableDictionary *_vkMethodSignatureCache;
 static vk_nilObject *vknilPointer = nil;
+static NSMutableDictionary *_vkNilPointerTempMemoryPool;
 
 static NSString *vk_extractStructName(NSString *typeEncodeString){
     
@@ -103,6 +104,8 @@ static id vk_targetCallSelectorWithArgumentError(id target, SEL selector, NSArra
     [invocation setTarget:target];
     [invocation setSelector:selector];
     
+    NSMutableArray* _markArray;
+    
     for (int i = 2; i< [methodSignature numberOfArguments]; i++) {
         const char *argumentType = [methodSignature getArgumentTypeAtIndex:i];
         id valObj = argsArr[i-2];
@@ -159,12 +162,24 @@ static id vk_targetCallSelectorWithArgumentError(id target, SEL selector, NSArra
                 break;
             case '^':{
                 vk_pointer *value = valObj;
-                void* pointer = value.pointer;
+                void *pointer = value.pointer;
+                id obj = *((__unsafe_unretained id *)pointer);
+                if (!obj) {
+                    if (argumentType[1] == '@') {
+                        if (!_vkNilPointerTempMemoryPool) {
+                            _vkNilPointerTempMemoryPool = [[NSMutableDictionary alloc] init];
+                        }
+                        if (!_markArray) {
+                            _markArray = [[NSMutableArray alloc] init];
+                        }
+                        [_markArray addObject:valObj];
+                    }
+                }
                 [invocation setArgument:&pointer atIndex:i];
             }
                 break;
             case '#':{
-                NSCAssert(NO, @"argument boxing wrong,class is not supported");
+                [invocation setArgument:&valObj atIndex:i];
             }
                 break;
             default:{
@@ -178,6 +193,19 @@ static id vk_targetCallSelectorWithArgumentError(id target, SEL selector, NSArra
     }
     
     [invocation invoke];
+    
+    if ([_markArray count] > 0) {
+        for (vk_pointer *pointerObj in _markArray) {
+            void *pointer = pointerObj.pointer;
+            id obj = *((__unsafe_unretained id *)pointer);
+            if (obj) {
+                @synchronized(_vkNilPointerTempMemoryPool) {
+                    [_vkNilPointerTempMemoryPool setObject:obj forKey:[NSNumber numberWithInteger:[(NSObject*)obj hash]]];
+                }
+            }
+        }
+    }
+    
     const char *returnType = [methodSignature methodReturnType];
     NSString *selName = vk_selectorName(selector);
     if (strncmp(returnType, "v", 1) != 0 ) {
@@ -335,8 +363,10 @@ static NSArray *vk_targetBoxingArguments(va_list argList, Class cls, SEL selecto
             }
                 break;
             case '#': {
-                vk_generateError(@"unsupported class argumenst",error);
-                return nil;
+                Class value = va_arg(argList, Class);
+                [argumentsBoxingArray addObject:(id)value];
+//                vk_generateError(@"unsupported class argumenst",error);
+//                return nil;
             }
                 break;
             case '@':{
@@ -410,6 +440,7 @@ static NSArray *vk_targetBoxingArguments(va_list argList, Class cls, SEL selecto
     if (!boxingArguments) {
         return nil;
     }
+    
     return vk_targetCallSelectorWithArgumentError(self, selector, boxingArguments, error);
 }
 
